@@ -1,0 +1,63 @@
+# deployments/docker-compose.yml
+
+services:
+  # База данных PostgreSQL
+  postgres:
+    image: postgres:15 # Используем стабильную версию PostgreSQL
+    container_name: neurobot-postgres # Имя для удобства
+    environment:
+      # Переменные для создания пользователя и БД при первом запуске
+      POSTGRES_USER: "neuro_user"      # Имя пользователя (запомним для конфига Go)
+      POSTGRES_PASSWORD: "aDSA3SAsdaf" # Пароль (запомним для конфига Go)
+      POSTGRES_DB: "neurobot_db"       # Имя БД (запомним для конфига Go)
+    ports:
+      # Открываем порт 5432 наружу, чтобы наши Go сервисы могли подключиться
+      - "5432:5432"
+    volumes:
+      # Сохраняем данные БД между перезапусками контейнера
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped # Перезапускать, если упал (кроме ручной остановки)
+    healthcheck: # Проверка, что БД готова принимать соединения
+      test: ["CMD-SHELL", "pg_isready -U neuro_user -d neurobot_db"]
+      interval: 10s # Проверять каждые 10 секунд
+      timeout: 5s   # Ждать ответа 5 секунд
+      retries: 5    # Попробовать 5 раз перед тем, как считать сервис нездоровым
+
+  # Кэш Redis
+  redis:
+    image: redis:7-alpine # Легковесный образ Redis 7
+    container_name: neurobot-redis
+    ports:
+      - "6379:6379" # Стандартный порт Redis
+    volumes:
+      - redis_data:/data # Сохраняем данные Redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"] # Проверяем командой PING
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Очередь сообщений NATS
+  nats:
+    image: nats:2.9-alpine # Актуальная версия NATS
+    container_name: neurobot-nats
+    ports:
+      # Порт 4222 для подключения клиентов (наших Go сервисов)
+      - "4222:4222"
+      # Порт 8222 для веб-интерфейса мониторинга NATS (опционально)
+      - "8222:8222"
+    restart: unless-stopped
+    # Команда для запуска NATS с включенным HTTP мониторингом
+    command: "-m 8222"
+    healthcheck:
+      # Проверяем доступность сервера (простая проверка)
+      test: ["CMD-SHELL", "nats-server -DV || exit 1"] # Примерная проверка, может потребовать доработки
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  # Определяем именованные volumes для хранения данных
+  postgres_data:
+  redis_data:

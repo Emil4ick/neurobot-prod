@@ -1,0 +1,37 @@
+# .gitignore
+
+# Compiled executables
+*.exe
+*.out
+neurobot-prod*
+webhook*
+msg_worker*
+llm_worker*
+resp_worker*
+
+# IDE folders
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Go dependency directory (if used)
+vendor/
+
+# Log files
+*.log
+
+# Environment files
+.env*
+
+# Configuration files with secrets (!!!)
+config/config.yaml
+config/config.yml
+config/secrets.*
+
+# Coverage reports
+coverage.*
