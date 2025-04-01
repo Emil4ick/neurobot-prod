@@ -1,0 +1,13 @@
+  GNU nano 7.2                                           config.yaml *                                                  # Настрteleg
+  token: "7650472213:AAF4D-MR_yHBX_kodBaCUl_pn_8JWgjjVj8"             # !!! Заменить на реальный токен
+  webhook_base_url: "http://localhost:8080"      # Базовый URL для вебхука (БЕЗ /webhook). Ngrok/домен для прода.
+  webhook_path: "/webhook"                       # Путь к обработчику вебхука
+  secret_token: "P2BJtlw8_hAJvn_3kDeusKS2yrrQgE"   # !!! Заменить на сложный случайный секрет
+
+# Настройки подключения к PostgreSQL
+db:
+  host: "localhost"                         # Docker пробрасывает порт на localhost
+  port: 5432
+  user: "neuro_user"                        # Должен совпадать с docker-compose.yml
+  password: "aDSA3SAsdaf"             # Должен совпадать с docker-compose.yml
+  name: "neurobot_db"
