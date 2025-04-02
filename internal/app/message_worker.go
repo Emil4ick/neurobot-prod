@@ -305,7 +305,7 @@ func (w *MessageWorker) handleDailyCommand(message *tgbotapi.Message) {
 
 	// Проверяем, может ли пользователь получить ежедневное вознаграждение
 	if !balance.CanReceiveDailyReward() {
-		timeLeft := time.Until(*balance.LastDailyRewardAt).Add(20 * time.Hour)
+		timeLeft := time.Until(*balance.LastDailyRewardAt) + 20*time.Hour
 		hours := int(timeLeft.Hours())
 		minutes := int(timeLeft.Minutes()) % 60
 

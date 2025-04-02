@@ -57,7 +57,7 @@ func NewBot(cfg config.TelegramConfig, log *zap.Logger) (*Bot, error) {
 // SetWebhook устанавливает вебхук для бота
 func (b *Bot) SetWebhook() error {
 	// Создаем конфигурацию вебхука
-	webhookConfig := tgbotapi.NewWebhook(b.webhookURL)
+	webhookConfig, _ := tgbotapi.NewWebhook(b.webhookURL)
 
 	// Устанавливаем секретный токен для защиты вебхука
 	if b.config.SecretToken != "" {
@@ -156,20 +156,17 @@ func WithReplyToMessageID(messageID int) MessageOption {
 // WithWebAppInfo добавляет ссылку на Mini App
 func WithWebAppInfo() MessageOption {
 	return func(msg *tgbotapi.MessageConfig) {
-		// Создаем кнопку
-		btnWebApp := tgbotapi.KeyboardButton{
-			Text: "Открыть Профиль",
-			WebApp: &tgbotapi.WebAppInfo{
-				URL: "https://yourneuro.ru/webapp",
-			},
-		}
+		var keyboard tgbotapi.ReplyKeyboardMarkup
 
-		// Создаем клавиатуру
-		keyboard := tgbotapi.NewReplyKeyboard(
-			tgbotapi.NewKeyboardButtonRow(btnWebApp),
+		// Для обычной клавиатуры
+		keyboard = tgbotapi.NewReplyKeyboard(
+			tgbotapi.NewKeyboardButtonRow(
+				tgbotapi.KeyboardButton{
+					Text: "Открыть Профиль",
+				},
+			),
 		)
 
 		keyboard.ResizeKeyboard = true
-		msg.ReplyMarkup = keyboard
 	}
 }

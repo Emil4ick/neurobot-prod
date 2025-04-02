@@ -30,7 +30,9 @@ func NewPublisher(cfg config.NATSConfig, log *zap.Logger) (*Publisher, error) {
 		nats.MaxReconnects(cfg.MaxReconnects),
 		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
 			logArg := zap.Skip()
-			if err != nil { logArg = zap.Error(err) }
+			if err != nil {
+				logArg = zap.Error(err)
+			}
 			logger.Warn("NATS отключен", logArg)
 		}),
 		nats.ReconnectHandler(func(nc *nats.Conn) {
@@ -40,8 +42,8 @@ func NewPublisher(cfg config.NATSConfig, log *zap.Logger) (*Publisher, error) {
 			logger.Warn("NATS соединение закрыто")
 		}),
 		nats.ErrorHandler(func(nc *nats.Conn, sub *nats.Subscription, err error) {
-            logger.Error("NATS асинхронная ошибка", zap.Stringp("subject", safeGetSubject(sub)), zap.Error(err))
-        }),
+			logger.Error("NATS асинхронная ошибка", zap.Stringp("subject", safeGetSubject(sub)), zap.Error(err))
+		}),
 	}
 
 	// Подключаемся к NATS
@@ -57,52 +59,56 @@ func NewPublisher(cfg config.NATSConfig, log *zap.Logger) (*Publisher, error) {
 
 // Publish сериализует данные в JSON и публикует в NATS.
 func (p *Publisher) Publish(ctx context.Context, subject string, data interface{}) error {
-    if p.nc == nil || !p.nc.IsConnected() { /* ... */ }
-    jsonData, err := json.Marshal(data)
-    if err != nil { /* ... */ }
+	if p.nc == nil || !p.nc.IsConnected() { /* ... */
+	}
+	jsonData, err := json.Marshal(data)
+	if err != nil { /* ... */
+	}
 
-    // Просто публикуем, без pubCtx
-    err = p.nc.Publish(subject, jsonData) // Используем простой Publish
+	// Просто публикуем, без pubCtx
+	err = p.nc.Publish(subject, jsonData) // Используем простой Publish
 
-    if err != nil { /* ... */ }
-    p.log.Debug("Сообщение успешно опубликовано в NATS", zap.String("subject", subject), zap.Int("data_size", len(jsonData)))
-    return nil
+	if err != nil { /* ... */
+	}
+	p.log.Debug("Сообщение успешно опубликовано в NATS", zap.String("subject", subject), zap.Int("data_size", len(jsonData)))
+	return nil
 }
 
 // Close корректно закрывает соединение с NATS.
 func (p *Publisher) Close() {
-    if p.nc != nil && !p.nc.IsClosed() {
-        p.log.Info("Начинаем Drain NATS соединения Publisher...")
+	if p.nc != nil && !p.nc.IsClosed() {
+		p.log.Info("Начинаем Drain NATS соединения Publisher...")
 
-        // Создаем канал для сигнализации о завершении Drain
-        done := make(chan bool)
-        go func() {
-            // Drain блокирует до завершения отправки буфера
-            if err := p.nc.Drain(); err != nil {
-                p.log.Error("Ошибка во время Drain NATS соединения", zap.Error(err))
-            } else {
-                 p.log.Info("Drain NATS соединения Publisher завершен.")
-            }
-            close(done) // Сигнализируем, что Drain (или ошибка) завершился
-        }()
+		// Создаем канал для сигнализации о завершении Drain
+		done := make(chan bool)
+		go func() {
+			// Drain блокирует до завершения отправки буфера
+			if err := p.nc.Drain(); err != nil {
+				p.log.Error("Ошибка во время Drain NATS соединения", zap.Error(err))
+			} else {
+				p.log.Info("Drain NATS соединения Publisher завершен.")
+			}
+			close(done) // Сигнализируем, что Drain (или ошибка) завершился
+		}()
 
-        // Ожидаем завершения Drain ИЛИ таймаута
-        select {
-        case <-done:
-            // Drain завершился (или произошла ошибка)
-            p.log.Debug("Горутина Drain завершила работу.")
-        case <-time.After(10 * time.Second): // Таймаут ожидания Drain
-            p.log.Warn("Таймаут ожидания Drain NATS соединения (10 секунд). Соединение будет закрыто принудительно.")
-        }
+		// Ожидаем завершения Drain ИЛИ таймаута
+		select {
+		case <-done:
+			// Drain завершился (или произошла ошибка)
+			p.log.Debug("Горутина Drain завершила работу.")
+		case <-time.After(10 * time.Second): // Таймаут ожидания Drain
+			p.log.Warn("Таймаут ожидания Drain NATS соединения (10 секунд). Соединение будет закрыто принудительно.")
+		}
 
-        p.nc.Close() // Закрываем соединение в любом случае
-        p.log.Info("Соединение NATS Publisher закрыто.")
-    }
+		p.nc.Close() // Закрываем соединение в любом случае
+		p.log.Info("Соединение NATS Publisher закрыто.")
+	}
 }
+
 // safeGetSubject безопасно получает имя темы из подписки
 func safeGetSubject(sub *nats.Subscription) *string {
-    if sub != nil {
-        return &sub.Subject
-    }
-    return nil
+	if sub != nil {
+		return &sub.Subject
+	}
+	return nil
 }
