@@ -11,9 +11,9 @@ import (
 	"net/http"
 	"time"
 
-	"go.uber.org/zap"
-
 	"neurobot-prod/internal/config"
+
+	"go.uber.org/zap"
 )
 
 // ClaudeClient представляет клиент для работы с API Claude

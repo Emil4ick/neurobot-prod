@@ -9,7 +9,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
 
-	"neurobot-prod/internal/config" // !!! Указываем правильный модуль !!!
+	"neurobot-prod/internal/config"
 )
 
 // Publisher отвечает за публикацию сообщений в NATS.
