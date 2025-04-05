@@ -28,6 +28,7 @@ type MessageWorker struct {
 	db               *sql.DB
 	redis            *redis.Client
 	bot              *telegram.Bot
+	api              *tgbotapi.BotAPI // API для прямых вызовов Telegram API
 	natsConn         *nats.Conn
 	natsSubscription *nats.Subscription
 	publisher        *queue.Publisher
@@ -88,10 +89,17 @@ func NewMessageWorker(cfg *config.Config, log *zap.Logger) (*MessageWorker, erro
 	currencyService := currency.NewService(currencyRepo, subService, logger)
 	llmService := llm.NewService(cfg, subService, currencyService, logger)
 
+	// Получаем API-интерфейс для прямых вызовов API
+	api, err := tgbotapi.NewBotAPI(cfg.Telegram.Token)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка создания API-интерфейса: %w", err)
+	}
+
 	return &MessageWorker{
 		db:              db,
 		redis:           redisClient,
 		bot:             bot,
+		api:             api, // Инициализируем поле api
 		natsConn:        natsConn,
 		publisher:       publisher,
 		config:          cfg,
@@ -219,7 +227,7 @@ func (w *MessageWorker) handleStartCommand(message *tgbotapi.Message) {
 			"/help - справка по командам",
 		message.From.FirstName)
 
-	// Отправляем приветственное сообщение с кнопкой для открытия Mini App
+	// Отправляем приветственное сообщение с базовой клавиатурой
 	w.bot.SendMessage(message.Chat.ID, text,
 		telegram.WithParseMode("Markdown"),
 		telegram.WithWebAppInfo())
@@ -286,6 +294,7 @@ func (w *MessageWorker) handleProfileCommand(message *tgbotapi.Message) {
 		balance.LifetimeSpent,
 		subscriptionInfo)
 
+	// Отправляем сообщение с клавиатурой для открытия профиля
 	w.bot.SendMessage(message.Chat.ID, text,
 		telegram.WithParseMode("Markdown"),
 		telegram.WithWebAppInfo())
@@ -440,7 +449,7 @@ func (w *MessageWorker) handleSubscribeCommand(message *tgbotapi.Message) {
 
 	parts = append(parts, "Для оформления подписки и просмотра всех преимуществ, используйте кнопку \"Открыть Профиль\" ниже.")
 
-	// Отправляем сообщение
+	// Отправляем сообщение с клавиатурой
 	text := strings.Join(parts, "\n")
 	w.bot.SendMessage(message.Chat.ID, text,
 		telegram.WithParseMode("Markdown"),
@@ -449,7 +458,78 @@ func (w *MessageWorker) handleSubscribeCommand(message *tgbotapi.Message) {
 
 // handleCallbackQuery обрабатывает callback-запросы (нажатия на инлайн-кнопки)
 func (w *MessageWorker) handleCallbackQuery(update *tgbotapi.Update) {
-	// TODO: Реализовать обработку callback-запросов
+	// Получаем данные из запроса
+	callbackQuery := update.CallbackQuery
+	callbackSenderID := int64(callbackQuery.From.ID)
+
+	w.log.Info("Получен callback query",
+		zap.String("data", callbackQuery.Data),
+		zap.Int64("user_id", callbackSenderID))
+
+	// Отправляем подтверждение о получении запроса
+	callback := tgbotapi.NewCallback(callbackQuery.ID, "Запрос получен")
+	_, err := w.api.Request(callback)
+	if err != nil {
+		w.log.Error("Ошибка отправки подтверждения callback",
+			zap.Error(err),
+			zap.Int64("user_id", callbackSenderID))
+	}
+
+	// Определяем действие на основе callbackQuery.Data
+	// Это примерная структура для разбора данных
+	parts := strings.Split(callbackQuery.Data, ":")
+	if len(parts) < 2 {
+		w.log.Warn("Некорректный формат данных callback",
+			zap.String("data", callbackQuery.Data))
+		return
+	}
+
+	action := parts[0]
+
+	switch action {
+	case "sub":
+		// Обработка команд подписки
+		if len(parts) < 3 {
+			return
+		}
+		planCode := parts[1]
+		period := parts[2]
+		w.handleSubscriptionRequest(callbackQuery, planCode, period)
+
+	case "buy":
+		// Обработка команд покупки нейронов
+		if len(parts) < 2 {
+			return
+		}
+		packageID := parts[1]
+		w.handleBuyNeuronsRequest(callbackQuery, packageID)
+
+	default:
+		w.log.Warn("Неизвестное действие в callback",
+			zap.String("action", action))
+	}
+}
+
+// handleSubscriptionRequest обрабатывает запрос на подписку
+func (w *MessageWorker) handleSubscriptionRequest(callback *tgbotapi.CallbackQuery, planCode string, period string) {
+	chatID := callback.Message.Chat.ID
+
+	// Здесь должна быть логика для создания платежа на подписку
+	// Пока просто отправляем сообщение
+	w.bot.SendMessage(chatID, fmt.Sprintf(
+		"Запрос на оформление подписки:\nПлан: %s\nПериод: %s\n\nПлатежная система пока не подключена.",
+		planCode, period))
+}
+
+// handleBuyNeuronsRequest обрабатывает запрос на покупку нейронов
+func (w *MessageWorker) handleBuyNeuronsRequest(callback *tgbotapi.CallbackQuery, packageID string) {
+	chatID := callback.Message.Chat.ID
+
+	// Здесь должна быть логика для создания платежа на покупку нейронов
+	// Пока просто отправляем сообщение
+	w.bot.SendMessage(chatID, fmt.Sprintf(
+		"Запрос на покупку нейронов:\nПакет: %s\n\nПлатежная система пока не подключена.",
+		packageID))
 }
 
 // handleNeuralRequest обрабатывает запрос к нейросети
@@ -459,13 +539,7 @@ func (w *MessageWorker) handleNeuralRequest(message *tgbotapi.Message) {
 	chatID := message.Chat.ID
 
 	// Отправляем уведомление о том, что запрос обрабатывается
-	responseMsg, err := w.bot.SendMessage(chatID, "⏳ Обрабатываю ваш запрос...")
-	if err != nil {
-		w.log.Error("Ошибка отправки уведомления",
-			zap.Int64("user_id", userID),
-			zap.Error(err))
-		return
-	}
+	w.bot.SendMessage(chatID, "⏳ Обрабатываю ваш запрос...")
 
 	// Получаем план подписки пользователя
 	plan, err := w.subService.GetSubscriptionPlan(context.Background(), userID)
@@ -572,13 +646,12 @@ func (w *MessageWorker) handleNeuralRequest(message *tgbotapi.Message) {
 		footer += " (ответ из кэша)"
 	}
 
-	// Отправляем результат (обновляем существующее сообщение)
-	limitedResponse := response.ResponseText
 	// Ограничиваем длину ответа, если необходимо
+	limitedResponse := response.ResponseText
 	if len(limitedResponse) > 4000 {
 		limitedResponse = limitedResponse[:4000] + "...\n\n(Ответ был слишком длинным и был обрезан)"
 	}
 
-	// Отправляем готовый ответ, обновляя предыдущее сообщение с "обрабатываю запрос"
+	// Отправляем готовый ответ
 	w.bot.SendMessage(chatID, limitedResponse+footer)
 }

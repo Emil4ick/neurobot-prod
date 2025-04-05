@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"fmt"
+	"net/url"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -56,16 +57,19 @@ func NewBot(cfg config.TelegramConfig, log *zap.Logger) (*Bot, error) {
 
 // SetWebhook устанавливает вебхук для бота
 func (b *Bot) SetWebhook() error {
-	// Создаем конфигурацию вебхука
-	webhookConfig, _ := tgbotapi.NewWebhook(b.webhookURL)
+	// Преобразуем строку URL в объект *url.URL
+	parsedURL, err := url.Parse(b.webhookURL)
+	if err != nil {
+		return fmt.Errorf("ошибка парсинга URL вебхука: %w", err)
+	}
 
-	// Устанавливаем секретный токен для защиты вебхука
-	if b.config.SecretToken != "" {
-		webhookConfig.SecretToken = b.config.SecretToken
+	// Создаем запрос на установку вебхука
+	webhook := tgbotapi.WebhookConfig{
+		URL: parsedURL,
 	}
 
 	// Устанавливаем вебхук
-	_, err := b.api.Request(webhookConfig)
+	_, err = b.api.Request(webhook)
 	if err != nil {
 		return fmt.Errorf("ошибка установки вебхука: %w", err)
 	}
@@ -86,7 +90,7 @@ func (b *Bot) SetWebhook() error {
 
 	b.log.Info("Вебхук успешно установлен",
 		zap.String("url", b.webhookURL),
-		zap.Bool("has_secret_token", b.config.SecretToken != ""))
+		zap.Bool("has_custom_cert", info.HasCustomCertificate))
 
 	return nil
 }
@@ -156,17 +160,13 @@ func WithReplyToMessageID(messageID int) MessageOption {
 // WithWebAppInfo добавляет ссылку на Mini App
 func WithWebAppInfo() MessageOption {
 	return func(msg *tgbotapi.MessageConfig) {
-		var keyboard tgbotapi.ReplyKeyboardMarkup
-
-		// Для обычной клавиатуры
-		keyboard = tgbotapi.NewReplyKeyboard(
+		// Создаем клавиатуру с кнопкой "Открыть Профиль"
+		keyboard := tgbotapi.NewReplyKeyboard(
 			tgbotapi.NewKeyboardButtonRow(
-				tgbotapi.KeyboardButton{
-					Text: "Открыть Профиль",
-				},
+				tgbotapi.NewKeyboardButton("Открыть Профиль"),
 			),
 		)
-
 		keyboard.ResizeKeyboard = true
+		msg.ReplyMarkup = keyboard
 	}
 }
