@@ -1,0 +1,12 @@
+FROM alpine:latest
+
+WORKDIR /app
+
+# Копируем предварительно скомпилированный бинарный файл
+COPY msg-worker .
+COPY config ./config
+
+# Добавляем необходимые CA сертификаты и временные зоны
+RUN apk --no-cache add ca-certificates tzdata
+
+CMD ["./msg-worker", "--config", "./config", "--mode", "worker"]

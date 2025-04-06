@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time" // Добавили для LeaseDuration, если понадобится
+	"time"
 
 	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
@@ -24,7 +24,7 @@ func NewPublisher(cfg config.NATSConfig, log *zap.Logger) (*Publisher, error) {
 	logger := log.Named("nats_publisher")
 
 	opts := []nats.Option{
-		nats.Name("Neurobot Publisher (Webhook)"), // Имя клиента
+		nats.Name("Neurobot Publisher"), // Имя клиента
 		nats.Timeout(cfg.GetTimeout()),
 		nats.ReconnectWait(cfg.GetReconnectWait()),
 		nats.MaxReconnects(cfg.MaxReconnects),
@@ -59,18 +59,28 @@ func NewPublisher(cfg config.NATSConfig, log *zap.Logger) (*Publisher, error) {
 
 // Publish сериализует данные в JSON и публикует в NATS.
 func (p *Publisher) Publish(ctx context.Context, subject string, data interface{}) error {
-	if p.nc == nil || !p.nc.IsConnected() { /* ... */
+	if p.nc == nil || !p.nc.IsConnected() {
+		return fmt.Errorf("соединение с NATS не установлено")
 	}
+	
 	jsonData, err := json.Marshal(data)
-	if err != nil { /* ... */
+	if err != nil {
+		return fmt.Errorf("ошибка сериализации данных: %w", err)
 	}
 
-	// Просто публикуем, без pubCtx
-	err = p.nc.Publish(subject, jsonData) // Используем простой Publish
-
-	if err != nil { /* ... */
+	// Публикуем сообщение
+	err = p.nc.Publish(subject, jsonData)
+	if err != nil {
+		p.log.Error("Ошибка публикации сообщения в NATS", 
+			zap.String("subject", subject), 
+			zap.Error(err))
+		return fmt.Errorf("ошибка публикации в NATS: %w", err)
 	}
-	p.log.Debug("Сообщение успешно опубликовано в NATS", zap.String("subject", subject), zap.Int("data_size", len(jsonData)))
+	
+	p.log.Debug("Сообщение успешно опубликовано в NATS", 
+		zap.String("subject", subject), 
+		zap.Int("data_size", len(jsonData)))
+	
 	return nil
 }
 

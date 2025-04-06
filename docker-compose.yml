@@ -1,0 +1,105 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: neurobot-postgres
+    environment:
+      POSTGRES_USER: neuro_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: neurobot_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    restart: always
+    ports:
+      - "5432:5432"
+    networks:
+      - neurobot_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: neurobot-redis
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - neurobot_network
+
+  nats:
+    image: nats:2-alpine
+    container_name: neurobot-nats
+    restart: always
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    networks:
+      - neurobot_network
+
+  webhook:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.webhook
+    container_name: neurobot-webhook
+    restart: always
+    env_file: .env
+    depends_on:
+      - postgres
+      - redis
+      - nats
+    ports:
+      - "8080:8080"
+    networks:
+      - neurobot_network
+
+  message-worker:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.msg_worker
+    container_name: neurobot-msg-worker
+    restart: always
+    env_file: .env
+    depends_on:
+      - postgres
+      - redis
+      - nats
+    networks:
+      - neurobot_network
+
+  llm-worker:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.llm_worker
+    container_name: neurobot-llm-worker
+    restart: always
+    env_file: .env
+    depends_on:
+      - postgres
+      - redis
+      - nats
+    networks:
+      - neurobot_network
+
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: neurobot-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - /etc/nginx/ssl/yourneuro.ru:/etc/nginx/ssl/yourneuro.ru
+      - ./webapp:/usr/share/nginx/html
+    restart: always
+    depends_on:
+      - webhook
+    networks:
+      - neurobot_network
+
+networks:
+  neurobot_network:
+
+volumes:
+  postgres_data:
+  redis_data:
