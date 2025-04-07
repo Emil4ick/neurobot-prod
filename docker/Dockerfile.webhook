@@ -1,10 +1,20 @@
+FROM golang:1.24-alpine AS builder
+
+WORKDIR /app
+
+# Копируем исходный код
+COPY . .
+
+# Собираем webhook-сервер
+RUN CGO_ENABLED=0 GOOS=linux go build -o webhook-server ./cmd/neurobot
+
 FROM alpine:latest
 
 WORKDIR /app
 
-# Копируем предварительно скомпилированный бинарный файл
-COPY webhook-server .
-COPY config ./config
+# Копируем скомпилированный бинарный файл и конфигурацию
+COPY --from=builder /app/webhook-server .
+COPY --from=builder /app/config ./config
 
 # Добавляем необходимые CA сертификаты и временные зоны
 RUN apk --no-cache add ca-certificates tzdata

@@ -353,6 +353,6 @@ func setDefaults(v *viper.Viper) {
 
 // ConnectionString генерирует строку подключения к PostgreSQL
 func (c *DBConfig) ConnectionString() string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s&pool_min_conns=%d&pool_max_conns=%d",
-		c.User, c.Password, c.Host, c.Port, c.Name, c.SSLMode, c.PoolMinConns, c.PoolMaxConns)
+	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
+		c.User, c.Password, c.Host, c.Port, c.Name, c.SSLMode)
 }

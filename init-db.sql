@@ -1,5 +1,5 @@
--- Файл для первичной инициализации базы данных
--- Создаем таблицу пользователей
+-- Р¤Р°Р№Р» РґР»СЏ РїРµСЂРІРёС‡РЅРѕР№ РёРЅРёС†РёР°Р»РёР·Р°С†РёРё Р±Р°Р·С‹ РґР°РЅРЅС‹С…
+-- РЎРѕР·РґР°РµРј С‚Р°Р±Р»РёС†Сѓ РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№
 CREATE TABLE IF NOT EXISTS users (
     id BIGSERIAL PRIMARY KEY,
     telegram_id BIGINT UNIQUE NOT NULL,
@@ -12,10 +12,10 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Индекс для быстрого поиска по telegram_id
+-- РРЅРґРµРєСЃ РґР»СЏ Р±С‹СЃС‚СЂРѕРіРѕ РїРѕРёСЃРєР° РїРѕ telegram_id
 CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id);
 
--- Таблица планов подписок
+-- РўР°Р±Р»РёС†Р° РїР»Р°РЅРѕРІ РїРѕРґРїРёСЃРѕРє
 CREATE TABLE IF NOT EXISTS subscription_plans (
     id SERIAL PRIMARY KEY,
     code VARCHAR(20) NOT NULL UNIQUE,
@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS subscription_plans (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Таблица подписок пользователей
+-- РўР°Р±Р»РёС†Р° РїРѕРґРїРёСЃРѕРє РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№
 CREATE TABLE IF NOT EXISTS user_subscriptions (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS user_subscriptions (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Таблица истории подписок
+-- РўР°Р±Р»РёС†Р° РёСЃС‚РѕСЂРёРё РїРѕРґРїРёСЃРѕРє
 CREATE TABLE IF NOT EXISTS subscription_history (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS subscription_history (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Таблица баланса нейронов
+-- РўР°Р±Р»РёС†Р° Р±Р°Р»Р°РЅСЃР° РЅРµР№СЂРѕРЅРѕРІ
 CREATE TABLE IF NOT EXISTS user_neuron_balance (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS user_neuron_balance (
     CONSTRAINT unique_user_balance UNIQUE (user_id)
 );
 
--- Таблица транзакций с нейронами
+-- РўР°Р±Р»РёС†Р° С‚СЂР°РЅР·Р°РєС†РёР№ СЃ РЅРµР№СЂРѕРЅР°РјРё
 CREATE TABLE IF NOT EXISTS neuron_transactions (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS neuron_transactions (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Таблица пакетов нейронов
+-- РўР°Р±Р»РёС†Р° РїР°РєРµС‚РѕРІ РЅРµР№СЂРѕРЅРѕРІ
 CREATE TABLE IF NOT EXISTS neuron_packages (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -97,7 +97,7 @@ CREATE TABLE IF NOT EXISTS neuron_packages (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Таблица использования нейросетей
+-- РўР°Р±Р»РёС†Р° РёСЃРїРѕР»СЊР·РѕРІР°РЅРёСЏ РЅРµР№СЂРѕСЃРµС‚РµР№
 CREATE TABLE IF NOT EXISTS llm_usage (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -113,23 +113,23 @@ CREATE TABLE IF NOT EXISTS llm_usage (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Начальные данные для планов подписок
+-- РќР°С‡Р°Р»СЊРЅС‹Рµ РґР°РЅРЅС‹Рµ РґР»СЏ РїР»Р°РЅРѕРІ РїРѕРґРїРёСЃРѕРє
 INSERT INTO subscription_plans (code, name, description, price_monthly, price_yearly, daily_neurons, max_request_length, context_messages, features, is_active)
 VALUES 
-('free', 'Бесплатный', 'Базовый доступ к нейросетям', 0, 0, 5, 500, 0, 
+('free', 'Р‘РµСЃРїР»Р°С‚РЅС‹Р№', 'Р‘Р°Р·РѕРІС‹Р№ РґРѕСЃС‚СѓРї Рє РЅРµР№СЂРѕСЃРµС‚СЏРј', 0, 0, 5, 500, 0, 
  '{"available_models": ["gpt-3.5-turbo", "claude-3-haiku", "gemini-1.0-pro", "grok-1"], "neuron_expiry_days": 3}', true),
 
-('premium', 'Премиум', 'Расширенный доступ к нейросетям с дополнительными функциями', 39900, 399000, 30, 2000, 10, 
+('premium', 'РџСЂРµРјРёСѓРј', 'Р Р°СЃС€РёСЂРµРЅРЅС‹Р№ РґРѕСЃС‚СѓРї Рє РЅРµР№СЂРѕСЃРµС‚СЏРј СЃ РґРѕРїРѕР»РЅРёС‚РµР»СЊРЅС‹РјРё С„СѓРЅРєС†РёСЏРјРё', 39900, 399000, 30, 2000, 10, 
  '{"available_models": ["gpt-3.5-turbo", "claude-3-haiku", "gemini-1.0-pro", "grok-1", "gpt-4o-mini", "claude-3-sonnet", "gemini-1.5-pro"], "welcome_bonus": 100, "neuron_discount": 10, "neuron_expiry_days": 7}', true),
 
-('pro', 'Профессиональный', 'Полный доступ ко всем нейросетям и функциям', 79900, 799000, 100, 0, 30, 
+('pro', 'РџСЂРѕС„РµСЃСЃРёРѕРЅР°Р»СЊРЅС‹Р№', 'РџРѕР»РЅС‹Р№ РґРѕСЃС‚СѓРї РєРѕ РІСЃРµРј РЅРµР№СЂРѕСЃРµС‚СЏРј Рё С„СѓРЅРєС†РёСЏРј', 79900, 799000, 100, 0, 30, 
  '{"available_models": ["gpt-3.5-turbo", "claude-3-haiku", "gemini-1.0-pro", "grok-1", "gpt-4o-mini", "claude-3-sonnet", "gemini-1.5-pro", "gpt-4o", "claude-3-opus", "grok-2"], "welcome_bonus": 300, "neuron_discount": 20, "priority_processing": true, "neuron_expiry_days": 30}', true);
 
--- Начальные данные для пакетов нейронов
+-- РќР°С‡Р°Р»СЊРЅС‹Рµ РґР°РЅРЅС‹Рµ РґР»СЏ РїР°РєРµС‚РѕРІ РЅРµР№СЂРѕРЅРѕРІ
 INSERT INTO neuron_packages (name, amount, bonus_amount, price, sort_order, is_active)
 VALUES 
-('50 Нейронов', 50, 0, 9900, 1, true),
-('150 Нейронов', 150, 20, 24900, 2, true),
-('350 Нейронов', 350, 50, 49900, 3, true),
-('700 Нейронов', 700, 140, 89900, 4, true),
-('1200 Нейронов', 1200, 300, 149900, 5, true);
+('50 РќРµР№СЂРѕРЅРѕРІ', 50, 0, 9900, 1, true),
+('150 РќРµР№СЂРѕРЅРѕРІ', 150, 20, 24900, 2, true),
+('350 РќРµР№СЂРѕРЅРѕРІ', 350, 50, 49900, 3, true),
+('700 РќРµР№СЂРѕРЅРѕРІ', 700, 140, 89900, 4, true),
+('1200 РќРµР№СЂРѕРЅРѕРІ', 1200, 300, 149900, 5, true);
