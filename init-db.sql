@@ -12,8 +12,13 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Индекс для быстрого поиска по telegram_id
+-- Оптимизированные индексы
 CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id);
+CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at);
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL;
+
+-- Также добавляем ANALYZE для статистики запросов
+ANALYZE users;
 
 -- Таблица планов подписок
 CREATE TABLE IF NOT EXISTS subscription_plans (

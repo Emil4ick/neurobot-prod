@@ -11,15 +11,22 @@ import (
 	"neurobot-prod/internal/config"
 )
 
-// NewRedisClient создает новый клиент Redis
+// NewRedisClient создает новый клиент Redis с оптимизациями для высокой нагрузки
 func NewRedisClient(cfg config.RedisConfig, log *zap.Logger) (*redis.Client, error) {
 	logger := log.Named("redis")
 
-	// Создаем клиент Redis
+	// Создаем клиент Redis с оптимизированными настройками
 	client := redis.NewClient(&redis.Options{
-		Addr:     cfg.Addr,
-		Password: cfg.Password,
-		DB:       cfg.DB,
+		Addr:            cfg.Addr,
+		Password:        cfg.Password,
+		DB:              cfg.DB,
+		DialTimeout:     3 * time.Second,   // Максимальное время ожидания соединения
+		ReadTimeout:     2 * time.Second,   // Максимальное время чтения
+		WriteTimeout:    2 * time.Second,   // Максимальное время записи
+		PoolSize:        50,                // Максимальное количество соединений в пуле
+		MinIdleConns:    10,                // Минимальное количество простаивающих соединений
+		MaxRetries:      3,                 // Количество повторных попыток при ошибке
+		ConnMaxIdleTime: 240 * time.Second, // Время жизни неиспользуемого соединения
 	})
 
 	// Проверяем соединение
@@ -32,7 +39,9 @@ func NewRedisClient(cfg config.RedisConfig, log *zap.Logger) (*redis.Client, err
 
 	logger.Info("Подключение к Redis успешно установлено",
 		zap.String("addr", cfg.Addr),
-		zap.Int("db", cfg.DB))
+		zap.Int("db", cfg.DB),
+		zap.Int("pool_size", 50),
+		zap.Int("min_idle_conns", 10))
 
 	return client, nil
 }

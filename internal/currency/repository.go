@@ -85,7 +85,7 @@ func (r *Repository) createInitialBalance(ctx context.Context, userID int64) (*B
 
 // AddTransaction добавляет новую транзакцию и обновляет баланс
 func (r *Repository) AddTransaction(ctx context.Context, tx *Transaction) error {
-	// Начинаем транзакцию в БД
+	// Начинаем транзакцию в БД с уровнем изоляции REPEATABLE READ для предотвращения гонок
 	dbTx, err := r.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return fmt.Errorf("ошибка начала транзакции: %w", err)
@@ -100,7 +100,7 @@ func (r *Repository) AddTransaction(ctx context.Context, tx *Transaction) error 
 		SELECT balance, lifetime_earned, lifetime_spent, last_daily_reward_at
 		FROM user_neuron_balance 
 		WHERE user_id = $1 
-		FOR UPDATE
+		FOR UPDATE  -- Блокировка строки для предотвращения гонок
 	`, tx.UserID).Scan(&currentBalance, &lifetimeEarned, &lifetimeSpent, &lastDailyRewardAt)
 
 	if err != nil {

@@ -21,6 +21,7 @@ import (
 	redisStorage "neurobot-prod/internal/storage/redis"
 	"neurobot-prod/internal/subscription"
 	"neurobot-prod/internal/telegram"
+	"neurobot-prod/internal/user"
 )
 
 // MessageWorker обрабатывает сообщения от пользователей
@@ -37,6 +38,7 @@ type MessageWorker struct {
 	currencyService  *currency.Service
 	subService       *subscription.Service
 	llmService       *llm.Service
+	userService      *user.Service
 }
 
 // NewMessageWorker создает новый обработчик сообщений
@@ -83,11 +85,13 @@ func NewMessageWorker(cfg *config.Config, log *zap.Logger) (*MessageWorker, erro
 	// Создаем репозитории
 	currencyRepo := currency.NewRepository(db)
 	subRepo := subscription.NewRepository(db)
+	userRepo := user.NewRepository(db)
 
 	// Создаем сервисы
 	subService := subscription.NewService(subRepo, logger)
 	currencyService := currency.NewService(currencyRepo, subService, logger)
 	llmService := llm.NewService(cfg, subService, currencyService, logger)
+	userService := user.NewService(userRepo, redisClient, logger)
 
 	// Получаем API-интерфейс для прямых вызовов API
 	api, err := tgbotapi.NewBotAPI(cfg.Telegram.Token)
@@ -107,6 +111,7 @@ func NewMessageWorker(cfg *config.Config, log *zap.Logger) (*MessageWorker, erro
 		currencyService: currencyService,
 		subService:      subService,
 		llmService:      llmService,
+		userService:     userService,
 	}, nil
 }
 
@@ -152,6 +157,9 @@ func (w *MessageWorker) Stop() {
 
 // handleMessage обрабатывает сообщение из NATS
 func (w *MessageWorker) handleMessage(msg *nats.Msg) {
+	// Замеряем время выполнения всей функции
+	startTime := time.Now()
+
 	// Парсим обновление
 	var update tgbotapi.Update
 	if err := json.Unmarshal(msg.Data, &update); err != nil {
@@ -159,15 +167,112 @@ func (w *MessageWorker) handleMessage(msg *nats.Msg) {
 		return
 	}
 
-	// Обрабатываем обновление в зависимости от его типа
+	// Извлекаем информацию о пользователе
+	var telegramID int64
+	var username, firstName, lastName, languageCode string
+	var isBot bool
+	var chatID int64
+
 	switch {
 	case update.Message != nil:
-		w.handleTextMessage(&update)
+		telegramID = int64(update.Message.From.ID)
+		username = update.Message.From.UserName
+		firstName = update.Message.From.FirstName
+		lastName = update.Message.From.LastName
+		languageCode = update.Message.From.LanguageCode
+		isBot = update.Message.From.IsBot
+		chatID = update.Message.Chat.ID
 	case update.CallbackQuery != nil:
-		w.handleCallbackQuery(&update)
+		telegramID = int64(update.CallbackQuery.From.ID)
+		username = update.CallbackQuery.From.UserName
+		firstName = update.CallbackQuery.From.FirstName
+		lastName = update.CallbackQuery.From.LastName
+		languageCode = update.CallbackQuery.From.LanguageCode
+		isBot = update.CallbackQuery.From.IsBot
+		chatID = update.CallbackQuery.Message.Chat.ID
 	default:
 		w.log.Debug("Получен неподдерживаемый тип обновления")
+		return
 	}
+
+	// Создаем канал для синхронизации с goroutine регистрации
+	userRegisteredChan := make(chan struct{})
+	userRegistrationFailed := make(chan error, 1)
+
+	// Асинхронно обеспечиваем регистрацию пользователя
+	go func() {
+		defer close(userRegisteredChan)
+
+		// Создаем контекст с таймаутом для регистрации
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		_, err := w.userService.EnsureUserExists(
+			ctx,
+			telegramID,
+			username,
+			firstName,
+			lastName,
+			languageCode,
+			isBot,
+		)
+
+		if err != nil {
+			select {
+			case userRegistrationFailed <- err:
+				// Ошибка отправлена в канал
+			default:
+				// Канал полный или закрыт, логируем ошибку
+				w.log.Error("Ошибка при регистрации пользователя",
+					zap.Int64("telegram_id", telegramID),
+					zap.Error(err))
+			}
+		}
+	}()
+
+	// Параллельно начинаем обработку обновления для улучшения отзывчивости
+	// Создаем канал для результата обработки сообщения
+	messageChan := make(chan struct{})
+
+	go func() {
+		defer close(messageChan)
+
+		// Обрабатываем обновление в зависимости от его типа
+		switch {
+		case update.Message != nil:
+			w.handleTextMessage(&update)
+		case update.CallbackQuery != nil:
+			w.handleCallbackQuery(&update)
+		}
+	}()
+
+	// Ожидаем первое из двух событий:
+	// 1. Регистрация пользователя завершена
+	// 2. Обработка сообщения завершена
+	select {
+	case <-userRegisteredChan:
+		// Пользователь успешно зарегистрирован
+		// Ждем завершения обработки сообщения
+		<-messageChan
+	case err := <-userRegistrationFailed:
+		// Ошибка при регистрации пользователя
+		// Отправляем пользователю сообщение об ошибке, если обработка сообщения завершилась
+		w.log.Error("Ошибка при регистрации пользователя, отправляем уведомление",
+			zap.Int64("telegram_id", telegramID),
+			zap.Error(err))
+
+		// Ожидаем завершения обработки сообщения
+		<-messageChan
+
+		w.bot.SendMessage(chatID, "Произошла ошибка при регистрации. Пожалуйста, попробуйте позже.")
+	case <-messageChan:
+		// Обработка сообщения завершена, ждем завершения регистрации
+		<-userRegisteredChan
+	}
+	// Логируем время выполнения для анализа производительности
+	w.log.Debug("Обработка сообщения завершена",
+		zap.Int64("telegram_id", telegramID),
+		zap.Duration("total_duration", time.Since(startTime)))
 }
 
 // handleTextMessage обрабатывает текстовые сообщения
